@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { WalletAnalysis } from "@/components/WalletAnalysis";
 import { RiskScoreCard } from "@/components/RiskScoreCard";
 import { TransactionHistory } from "@/components/TransactionHistory";
