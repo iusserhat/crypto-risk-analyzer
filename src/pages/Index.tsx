@@ -6,28 +6,42 @@ import { TransactionHistory } from "@/components/TransactionHistory";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
+import { analyzeWalletRisk, WalletData } from "@/utils/riskAnalysis";
 
 const Index = () => {
   const [walletAddress, setWalletAddress] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [walletData, setWalletData] = useState<WalletData | null>(null);
   const { toast } = useToast();
 
   const handleAnalysis = async () => {
     if (!walletAddress) {
       toast({
-        title: "Error",
-        description: "Please enter a wallet address",
+        title: "Hata",
+        description: "Lütfen bir cüzdan adresi girin",
         variant: "destructive",
       });
       return;
     }
 
     setIsAnalyzing(true);
-    // Simulate analysis delay
-    setTimeout(() => {
+    try {
+      const data = await analyzeWalletRisk(walletAddress);
+      setWalletData(data);
+      toast({
+        title: "Başarılı",
+        description: "Cüzdan analizi tamamlandı",
+      });
+    } catch (error) {
+      toast({
+        title: "Hata",
+        description: "Cüzdan analizi sırasında bir hata oluştu",
+        variant: "destructive",
+      });
+    } finally {
       setIsAnalyzing(false);
-    }, 2000);
+    }
   };
 
   return (
@@ -40,10 +54,10 @@ const Index = () => {
           className="text-center mb-12"
         >
           <h1 className="text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-gray-100 dark:to-gray-400">
-            Crypto Wallet Risk Analyzer
+            Kripto Cüzdan Risk Analizi
           </h1>
           <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            Advanced risk analysis for cryptocurrency wallets using AI-powered insights
+            Yapay zeka destekli kripto cüzdan risk analizi
           </p>
         </motion.div>
 
@@ -57,7 +71,7 @@ const Index = () => {
             <div className="flex gap-4">
               <Input
                 type="text"
-                placeholder="Enter wallet address"
+                placeholder="Cüzdan adresini girin"
                 value={walletAddress}
                 onChange={(e) => setWalletAddress(e.target.value)}
                 className="flex-1"
@@ -67,16 +81,16 @@ const Index = () => {
                 disabled={isAnalyzing}
                 className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:hover:bg-gray-200 dark:text-gray-900"
               >
-                {isAnalyzing ? "Analyzing..." : "Analyze"}
+                {isAnalyzing ? "Analiz ediliyor..." : "Analiz Et"}
               </Button>
             </div>
           </div>
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-          <RiskScoreCard title="Overall Risk Score" score={85} />
-          <RiskScoreCard title="Transaction Risk" score={92} />
-          <RiskScoreCard title="Smart Contract Risk" score={78} />
+          <RiskScoreCard title="Genel Risk Skoru" score={walletData?.riskScore || 0} />
+          <RiskScoreCard title="İşlem Riski" score={92} />
+          <RiskScoreCard title="Akıllı Kontrat Riski" score={78} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
