@@ -19,9 +19,13 @@ export const analyzeWalletRisk = async (walletAddress: string, apiKey: string): 
     const response = await fetch(`https://api.etherscan.io/api?module=account&action=txlist&address=${walletAddress}&startblock=0&endblock=99999999&sort=asc&apikey=${apiKey}`);
     const data = await response.json();
 
-    // API yanıtını kontrol et
-    if (data.status === "0" || !Array.isArray(data.result)) {
-      throw new Error(data.message || "Invalid API response");
+    // API yanıtını detaylı kontrol et
+    if (data.status !== "1") {
+      throw new Error(data.message || "API error");
+    }
+
+    if (!data.result || !Array.isArray(data.result) || data.result.length === 0) {
+      throw new Error("No transactions found");
     }
 
     // Transactionları dönüştür
@@ -36,12 +40,18 @@ export const analyzeWalletRisk = async (walletAddress: string, apiKey: string): 
     return {
       address: walletAddress,
       transactions,
-      balance: "Loading...", // Balance will be implemented later
+      balance: "Loading...",
       riskScore: calculateRiskScore(transactions)
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error analyzing wallet:", error);
-    throw new Error("Failed to analyze wallet");
+    // Daha anlamlı hata mesajları
+    if (error.message === "No transactions found") {
+      throw new Error("Bu cüzdanda henüz işlem bulunmuyor");
+    } else if (error.message.includes("API error")) {
+      throw new Error("Etherscan API hatası: Lütfen API anahtarınızı kontrol edin");
+    }
+    throw new Error("Cüzdan analizi sırasında bir hata oluştu");
   }
 };
 
@@ -66,6 +76,5 @@ function calculateRiskScore(transactions: Transaction[]): number {
     }
   }, 0);
 
-  // Normalize to 0-100 range
   return Math.min(100, Math.round((riskPoints / (transactions.length * 10)) * 100));
 }
