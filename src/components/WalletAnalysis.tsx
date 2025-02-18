@@ -1,4 +1,3 @@
-
 import { Card } from "@/components/ui/card";
 import {
   LineChart,
@@ -10,17 +9,21 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const data = [
-  { name: "Jan", risk: 65 },
-  { name: "Feb", risk: 59 },
-  { name: "Mar", risk: 80 },
-  { name: "Apr", risk: 81 },
-  { name: "May", risk: 56 },
-  { name: "Jun", risk: 55 },
-  { name: "Jul", risk: 40 },
-];
+interface WalletAnalysisProps {
+  walletData: { riskScoreHistory: { name: string; risk: number }[] } | null;
+}
 
-export const WalletAnalysis = () => {
+export const WalletAnalysis: React.FC<WalletAnalysisProps> = ({ walletData }) => {
+  const data = walletData?.riskScoreHistory || [
+    { name: "Jan", risk: 65 },
+    { name: "Feb", risk: 59 },
+    { name: "Mar", risk: 80 },
+    { name: "Apr", risk: 81 },
+    { name: "May", risk: 56 },
+    { name: "Jun", risk: 55 },
+    { name: "Jul", risk: 40 },
+  ];
+
   return (
     <Card className="p-6 backdrop-blur-lg bg-white/30 dark:bg-black/30 border border-gray-200 dark:border-gray-700">
       <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Risk Analysis Over Time</h2>
