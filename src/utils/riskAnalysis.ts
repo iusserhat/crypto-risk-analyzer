@@ -14,9 +14,9 @@ interface Transaction {
   riskLevel: "Low" | "Medium" | "High";
 }
 
-export const analyzeWalletRisk = async (walletAddress: string): Promise<WalletData> => {
+export const analyzeWalletRisk = async (walletAddress: string, apiKey: string): Promise<WalletData> => {
   try {
-    const response = await fetch(`https://api.etherscan.io/api?module=account&action=txlist&address=${walletAddress}&startblock=0&endblock=99999999&sort=asc&apikey=YourApiKey`);
+    const response = await fetch(`https://api.etherscan.io/api?module=account&action=txlist&address=${walletAddress}&startblock=0&endblock=99999999&sort=asc&apikey=${apiKey}`);
     const data = await response.json();
 
     // API yanıtını kontrol et

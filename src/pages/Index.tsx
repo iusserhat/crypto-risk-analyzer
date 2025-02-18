@@ -11,6 +11,7 @@ import { analyzeWalletRisk, WalletData } from "@/utils/riskAnalysis";
 
 const Index = () => {
   const [walletAddress, setWalletAddress] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [walletData, setWalletData] = useState<WalletData | null>(null);
   const { toast } = useToast();
@@ -25,9 +26,18 @@ const Index = () => {
       return;
     }
 
+    if (!apiKey) {
+      toast({
+        title: "Hata",
+        description: "Lütfen Etherscan API anahtarını girin",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsAnalyzing(true);
     try {
-      const data = await analyzeWalletRisk(walletAddress);
+      const data = await analyzeWalletRisk(walletAddress, apiKey);
       setWalletData(data);
       toast({
         title: "Başarılı",
@@ -67,7 +77,16 @@ const Index = () => {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="max-w-xl mx-auto mb-12"
         >
-          <div className="backdrop-blur-lg bg-white/30 dark:bg-black/30 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="backdrop-blur-lg bg-white/30 dark:bg-black/30 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
+            <div className="flex gap-4">
+              <Input
+                type="text"
+                placeholder="Etherscan API Key"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="flex-1"
+              />
+            </div>
             <div className="flex gap-4">
               <Input
                 type="text"
