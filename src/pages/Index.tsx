@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { WalletAnalysis } from "@/components/WalletAnalysis";
 import { RiskScoreCard } from "@/components/RiskScoreCard";
@@ -9,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { analyzeWalletRisk, WalletData } from "@/utils/riskAnalysis";
 
+const ETHERSCAN_API_KEY = "S8SP4TN1QYX5FNPFTBQVKQ8WGQRAI4MNFK";
+
 const Index = () => {
   const [walletAddress, setWalletAddress] = useState("");
-  const [apiKey, setApiKey] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [walletData, setWalletData] = useState<WalletData | null>(null);
   const { toast } = useToast();
@@ -26,27 +26,19 @@ const Index = () => {
       return;
     }
 
-    if (!apiKey) {
-      toast({
-        title: "Hata",
-        description: "Lütfen Etherscan API anahtarını girin",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsAnalyzing(true);
     try {
-      const data = await analyzeWalletRisk(walletAddress, apiKey);
+      const data = await analyzeWalletRisk(walletAddress, ETHERSCAN_API_KEY);
       setWalletData(data);
       toast({
         title: "Başarılı",
         description: "Cüzdan analizi tamamlandı",
+        className: "custom-toast",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Hata",
-        description: "Cüzdan analizi sırasında bir hata oluştu",
+        description: error.message || "Cüzdan analizi sırasında bir hata oluştu",
         variant: "destructive",
       });
     } finally {
@@ -81,15 +73,6 @@ const Index = () => {
             <div className="flex gap-4">
               <Input
                 type="text"
-                placeholder="Etherscan API Key"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="flex-1"
-              />
-            </div>
-            <div className="flex gap-4">
-              <Input
-                type="text"
                 placeholder="Cüzdan adresini girin"
                 value={walletAddress}
                 onChange={(e) => setWalletAddress(e.target.value)}
@@ -108,12 +91,12 @@ const Index = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
           <RiskScoreCard title="Genel Risk Skoru" score={walletData?.riskScore || 0} />
-          <RiskScoreCard title="İşlem Riski" score={92} />
-          <RiskScoreCard title="Akıllı Kontrat Riski" score={78} />
+          <RiskScoreCard title="İşlem Riski" score={walletData?.transactionRisk || 0} />
+          <RiskScoreCard title="Akıllı Kontrat Riski" score={walletData?.smartContractRisk || 0} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <WalletAnalysis />
+          <WalletAnalysis walletData={walletData} />
           <TransactionHistory />
         </div>
       </div>

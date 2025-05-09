@@ -1,80 +1,219 @@
+// utils/riskAnalysis.ts
 
 export interface WalletData {
-  address: string;
-  transactions: Transaction[];
-  balance: string;
   riskScore: number;
+  transactionRisk: number;
+  smartContractRisk: number;
+  transactions: Transaction[];
+  analysis: WalletAnalysisData;
 }
 
 interface Transaction {
   hash: string;
-  type: string;
-  amount: string;
-  timestamp: string;
-  riskLevel: "Low" | "Medium" | "High";
+  from: string;
+  to: string;
+  value: string;
+  timestamp: number;
+  gasPrice: string;
+  gasUsed: string;
+  input: string;
 }
 
-export const analyzeWalletRisk = async (walletAddress: string, apiKey: string): Promise<WalletData> => {
+interface WalletAnalysisData {
+  totalTransactions: number;
+  uniqueContacts: number;
+  avgTransactionValue: number;
+  riskFactors: string[];
+  age: number; // cüzdan yaşı (gün)
+  lastActivity: number; // son aktiviteden bu yana geçen gün
+  contractInteractionRate: number;
+}
+
+export const analyzeWalletRisk = async (
+  walletAddress: string,
+  apiKey: string
+): Promise<WalletData> => {
   try {
-    const response = await fetch(`https://api.etherscan.io/api?module=account&action=txlist&address=${walletAddress}&startblock=0&endblock=99999999&sort=asc&apikey=${apiKey}`);
+    const baseUrl = `https://api.etherscan.io/api`;
+    const response = await fetch(
+      `${baseUrl}?module=account&action=txlist&address=${walletAddress}&apikey=${apiKey}&startblock=0&endblock=99999999&sort=desc`
+    );
+    
     const data = await response.json();
-
-    // API yanıtını detaylı kontrol et
+    
     if (data.status !== "1") {
-      throw new Error(data.message || "API error");
+      throw new Error(data.message || "Failed to fetch wallet data");
     }
 
-    if (!data.result || !Array.isArray(data.result) || data.result.length === 0) {
-      throw new Error("No transactions found");
+    const transactions = data.result;
+    
+    if (transactions.length === 0) {
+      throw new Error("No transactions found for this wallet");
     }
 
-    // Transactionları dönüştür
-    const transactions = data.result.slice(0, 10).map((tx: any) => ({
-      hash: tx.hash || "Unknown",
-      type: tx.input === "0x" ? "Transfer" : "Contract Interaction",
-      amount: `${(Number(tx.value) / 1e18).toFixed(4)} ETH`,
-      timestamp: new Date(Number(tx.timeStamp) * 1000).toISOString(),
-      riskLevel: determineRiskLevel(tx)
-    }));
+    // Temel metrikleri hesapla
+    const metrics = calculateBaseMetrics(transactions);
+    
+    // Risk skorlarını hesapla
+    const transactionRisk = calculateTransactionRisk(transactions, metrics);
+    const smartContractRisk = calculateSmartContractRisk(transactions, metrics);
+    
+    // Ağırlıklı ortalama ile genel risk skorunu hesapla
+    const overallRisk = calculateOverallRisk(transactionRisk, smartContractRisk, metrics);
 
     return {
-      address: walletAddress,
-      transactions,
-      balance: "Loading...",
-      riskScore: calculateRiskScore(transactions)
+      riskScore: normalizeScore(overallRisk),
+      transactionRisk: normalizeScore(transactionRisk),
+      smartContractRisk: normalizeScore(smartContractRisk),
+      transactions: transactions.slice(0, 10).map(formatTransaction),
+      analysis: {
+        totalTransactions: metrics.totalTransactions,
+        uniqueContacts: metrics.uniqueContacts,
+        avgTransactionValue: metrics.avgTransactionValue,
+        riskFactors: determineRiskFactors(metrics),
+        age: metrics.walletAge,
+        lastActivity: metrics.daysSinceLastActivity,
+        contractInteractionRate: metrics.contractInteractionRate
+      }
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error analyzing wallet:", error);
-    // Daha anlamlı hata mesajları
-    if (error.message === "No transactions found") {
-      throw new Error("Bu cüzdanda henüz işlem bulunmuyor");
-    } else if (error.message.includes("API error")) {
-      throw new Error("Etherscan API hatası: Lütfen API anahtarınızı kontrol edin");
-    }
-    throw new Error("Cüzdan analizi sırasında bir hata oluştu");
+    throw error;
   }
 };
 
-// Risk seviyesini belirle
-function determineRiskLevel(tx: any): "Low" | "Medium" | "High" {
-  const value = Number(tx.value) / 1e18; // Convert to ETH
-  if (value > 10) return "High";
-  if (value > 1) return "Medium";
-  return "Low";
-}
-
-// Risk skorunu hesapla
-function calculateRiskScore(transactions: Transaction[]): number {
-  if (transactions.length === 0) return 0;
+const calculateBaseMetrics = (transactions: any[]) => {
+  const now = Math.floor(Date.now() / 1000);
+  const uniqueAddresses = new Set<string>();
+  let totalValue = 0;
+  let totalGasUsed = 0;
+  let contractInteractions = 0;
   
-  const riskPoints = transactions.reduce((total, tx) => {
-    switch (tx.riskLevel) {
-      case "High": return total + 10;
-      case "Medium": return total + 5;
-      case "Low": return total + 1;
-      default: return total;
-    }
-  }, 0);
+  transactions.forEach(tx => {
+    uniqueAddresses.add(tx.to);
+    uniqueAddresses.add(tx.from);
+    totalValue += parseInt(tx.value) / 1e18;
+    totalGasUsed += parseInt(tx.gasUsed) * parseInt(tx.gasPrice);
+    if (tx.input && tx.input !== '0x') contractInteractions++;
+  });
 
-  return Math.min(100, Math.round((riskPoints / (transactions.length * 10)) * 100));
-}
+  const firstTx = parseInt(transactions[transactions.length - 1].timeStamp);
+  const lastTx = parseInt(transactions[0].timeStamp);
+  
+  return {
+    totalTransactions: transactions.length,
+    uniqueContacts: uniqueAddresses.size - 1,
+    avgTransactionValue: totalValue / transactions.length,
+    avgGasUsed: totalGasUsed / transactions.length,
+    contractInteractionRate: contractInteractions / transactions.length,
+    walletAge: Math.floor((now - firstTx) / 86400),
+    daysSinceLastActivity: Math.floor((now - lastTx) / 86400),
+    txFrequency: transactions.length / (Math.max(1, (lastTx - firstTx) / 86400))
+  };
+};
+
+const calculateTransactionRisk = (transactions: any[], metrics: any): number => {
+  let risk = 0;
+  
+  // Aktivite yoğunluğu riski (0-30)
+  const activityRisk = Math.min(30, (metrics.txFrequency / 5) * 30);
+  
+  // İşlem değeri riski (0-25)
+  const valueRisk = Math.min(25, (metrics.avgTransactionValue / 50) * 25);
+  
+  // Cüzdan yaşı riski (0-20) - yeni cüzdanlar daha riskli
+  const ageRisk = Math.max(0, 20 - (metrics.walletAge / 30));
+  
+  // Son aktivite riski (0-15)
+  const lastActivityRisk = Math.max(0, 15 - (metrics.daysSinceLastActivity / 2));
+  
+  // Benzersiz kontakt riski (0-10)
+  const contactRisk = Math.min(10, (metrics.uniqueContacts / 100) * 10);
+  
+  risk = activityRisk + valueRisk + ageRisk + lastActivityRisk + contactRisk;
+  return risk;
+};
+
+const calculateSmartContractRisk = (transactions: any[], metrics: any): number => {
+  let risk = 0;
+  
+  // Kontrat etkileşim oranı riski (0-40)
+  const interactionRisk = metrics.contractInteractionRate * 40;
+  
+  // Gaz kullanım riski (0-30)
+  const gasRisk = Math.min(30, (metrics.avgGasUsed / 1e15) * 30);
+  
+  // Kontrat çeşitliliği riski (0-30)
+  const uniqueContracts = new Set(
+    transactions
+      .filter(tx => tx.input && tx.input !== '0x')
+      .map(tx => tx.to)
+  ).size;
+  const contractDiversityRisk = Math.min(30, (uniqueContracts / 20) * 30);
+  
+  risk = interactionRisk + gasRisk + contractDiversityRisk;
+  return risk;
+};
+
+const calculateOverallRisk = (
+  transactionRisk: number,
+  smartContractRisk: number,
+  metrics: any
+): number => {
+  // Cüzdan yaşına göre ağırlıkları ayarla
+  const ageWeight = Math.min(1, metrics.walletAge / 365);
+  
+  // Aktivite seviyesine göre ağırlıkları ayarla
+  const activityWeight = Math.min(1, metrics.totalTransactions / 1000);
+  
+  return (
+    transactionRisk * (0.4 + ageWeight * 0.1) +
+    smartContractRisk * (0.6 - ageWeight * 0.1)
+  ) * (0.7 + activityWeight * 0.3);
+};
+
+const normalizeScore = (score: number): number => {
+  // Skoru 0-100 aralığına normalize et
+  return Math.min(100, Math.max(0, Math.round(score)));
+};
+
+const formatTransaction = (tx: any): Transaction => ({
+  hash: tx.hash,
+  from: tx.from,
+  to: tx.to,
+  value: (parseInt(tx.value) / 1e18).toFixed(4),
+  timestamp: parseInt(tx.timeStamp),
+  gasPrice: tx.gasPrice,
+  gasUsed: tx.gasUsed,
+  input: tx.input
+});
+
+const determineRiskFactors = (metrics: any): string[] => {
+  const factors: string[] = [];
+  
+  if (metrics.txFrequency > 5) {
+    factors.push("Yüksek işlem sıklığı");
+  }
+  
+  if (metrics.contractInteractionRate > 0.5) {
+    factors.push("Yoğun akıllı kontrat etkileşimi");
+  }
+  
+  if (metrics.avgTransactionValue > 10) {
+    factors.push("Yüksek işlem değerleri");
+  }
+  
+  if (metrics.walletAge < 30) {
+    factors.push("Yeni cüzdan");
+  }
+  
+  if (metrics.daysSinceLastActivity < 1) {
+    factors.push("Çok aktif cüzdan");
+  }
+  
+  if (metrics.uniqueContacts > 100) {
+    factors.push("Çok sayıda benzersiz kontakt");
+  }
+  
+  return factors;
+};
